@@ -66,12 +66,14 @@ export function LiveMap({
         markerRefs.current.set(m.id, L.marker([m.position.lat, m.position.lng], { icon }).addTo(map).bindPopup(popup));
       }
     }
-    for (const [id, marker] of markerRefs.current) {
+    const stale: string[] = [];
+    markerRefs.current.forEach((marker, id) => {
       if (!seen.has(id)) {
         marker.remove();
-        markerRefs.current.delete(id);
+        stale.push(id);
       }
-    }
+    });
+    stale.forEach((id) => markerRefs.current.delete(id));
 
     lineRefs.current.forEach((l) => l.remove());
     lineRefs.current = lines.map((l) =>
