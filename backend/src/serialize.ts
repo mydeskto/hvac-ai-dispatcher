@@ -1,3 +1,4 @@
+import { geocode } from './geo';
 import { db } from './store';
 import { Booking, Call } from './types';
 
@@ -11,6 +12,7 @@ export function bookingView(booking: Booking) {
     customerPhone: customer?.phone ?? null,
     customerWhatsapp: customer?.whatsapp ?? null,
     location: customer?.location ?? null,
+    coords: customer ? geocode(customer.location) : null,
     technicianName: technician?.name ?? null,
     whatsappMessage: whatsapp,
   };

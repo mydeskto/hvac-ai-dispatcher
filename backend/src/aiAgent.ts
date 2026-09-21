@@ -94,6 +94,8 @@ function finalizeBooking(session: Session, call: Call, whatsappNumber: string): 
     start: start.toISOString(),
     end: end.toISOString(),
     status: 'Pending',
+    jobStage: 'Assigned',
+    jobEvents: [{ stage: 'Assigned', at: new Date().toISOString(), note: null }],
     notes: `Captured by AI dispatcher during call ${call.id}.`,
     source: 'ai-call',
     callId: call.id,

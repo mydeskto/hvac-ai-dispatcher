@@ -2,11 +2,22 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { endCall, reply, startCall } from './aiAgent';
 import { availableTechnicians, nextOpenSlots, slotsForDay } from './availability';
+import { SERVICE_CENTER } from './geo';
 import { generateWav } from './recording';
 import { bookingView, callView } from './serialize';
 import { SLOT_MINUTES, db, seed } from './store';
 import { buildStats, Range } from './stats';
-import { Booking, BookingStatus, ServiceType } from './types';
+import {
+  setJobStage,
+  techLogin,
+  techLogout,
+  techFromToken,
+  techSummary,
+  technicianBookings,
+  trackingView,
+  updateTechLocation,
+} from './tracking';
+import { Booking, BookingStatus, JobStage, ServiceType, Technician } from './types';
 import { addMinutes, id } from './util';
 import { applyWhatsAppResponse, sendBookingConfirmation } from './whatsapp';
 
@@ -75,9 +86,16 @@ router.post('/technicians', (req, res) => {
       skills: z.array(serviceSchema).min(1),
       workingHours: z.object({ days: z.array(z.number().min(0).max(6)), start: z.string(), end: z.string() }),
       active: z.boolean().default(true),
+      pin: z.string().regex(/^\d{4}$/).optional(),
     })
     .parse(req.body);
-  const technician = { id: id('tech'), ...body };
+  const technician: Technician = {
+    id: id('tech'),
+    ...body,
+    pin: body.pin ?? Math.floor(1000 + Math.random() * 9000).toString(),
+    location: { ...SERVICE_CENTER, updatedAt: new Date().toISOString() },
+    sharingLocation: false,
+  };
   db.technicians.push(technician);
   res.status(201).json(technician);
 });
@@ -92,10 +110,22 @@ router.patch('/technicians/:id', (req, res) => {
       skills: z.array(serviceSchema).optional(),
       workingHours: z.object({ days: z.array(z.number()), start: z.string(), end: z.string() }).optional(),
       active: z.boolean().optional(),
+      pin: z.string().regex(/^\d{4}$/).optional(),
     })
     .parse(req.body);
   Object.assign(technician, body);
   res.json(technician);
+});
+
+/** Work detail for one technician (admin view): stats + jobs + live position. */
+router.get('/technicians/:id/work', (req, res) => {
+  const technician = db.technicians.find((t) => t.id === req.params.id);
+  if (!technician) throw httpError(404, 'Technician not found');
+  res.json({
+    technician,
+    summary: techSummary(technician),
+    jobs: technicianBookings(technician.id).map(bookingView),
+  });
 });
 
 /* -------------------------------- customers ------------------------------- */
@@ -190,6 +220,63 @@ router.post('/ai/calls/simulate', (_req, res) => {
   res.status(201).json({ call: call ? callView(call) : null, bookingId: turn.bookingId });
 });
 
+/* --------------------------- technician portal --------------------------- */
+
+const jobStageSchema = z.enum(['EnRoute', 'OnSite', 'Done']);
+
+function requireTech(req: { headers: Record<string, unknown> }): Technician {
+  const token = typeof req.headers['x-tech-token'] === 'string' ? req.headers['x-tech-token'] : undefined;
+  const technician = techFromToken(token);
+  if (!technician) throw httpError(401, 'Technician sign-in required');
+  return technician;
+}
+
+router.post('/tech/login', (req, res) => {
+  const body = z.object({ phone: z.string().min(5), pin: z.string().min(4) }).parse(req.body);
+  const session = techLogin(body.phone, body.pin);
+  if (!session) throw httpError(401, 'Phone number or PIN is incorrect');
+  res.json({ token: session.token, technician: session.technician });
+});
+
+router.post('/tech/logout', (req, res) => {
+  const token = req.headers['x-tech-token'];
+  if (typeof token === 'string') techLogout(token);
+  res.json({ ok: true });
+});
+
+router.get('/tech/me', (req, res) => {
+  const technician = requireTech(req);
+  res.json({ technician, summary: techSummary(technician) });
+});
+
+router.get('/tech/jobs', (req, res) => {
+  const technician = requireTech(req);
+  res.json(technicianBookings(technician.id).map(bookingView));
+});
+
+router.post('/tech/jobs/:id/stage', (req, res) => {
+  const technician = requireTech(req);
+  const booking = db.bookings.find((b) => b.id === req.params.id && b.technicianId === technician.id);
+  if (!booking) throw httpError(404, 'Job not found');
+  if (booking.status === 'Cancelled' || booking.status === 'Completed') throw httpError(409, 'Job is already closed');
+  const body = z.object({ stage: jobStageSchema, note: z.string().optional() }).parse(req.body);
+  res.json(bookingView(setJobStage(booking, body.stage as JobStage, body.note)));
+});
+
+router.post('/tech/location', (req, res) => {
+  const technician = requireTech(req);
+  const body = z
+    .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), sharing: z.boolean().optional() })
+    .parse(req.body);
+  res.json(updateTechLocation(technician, body.lat, body.lng, body.sharing));
+});
+
+/* ------------------------------ live tracking ----------------------------- */
+
+router.get('/tracking', (_req, res) => {
+  res.json(trackingView());
+});
+
 /* -------------------------------- bookings -------------------------------- */
 
 router.get('/bookings', (req, res) => {
@@ -257,6 +344,8 @@ router.post('/bookings', (req, res) => {
     start: start.toISOString(),
     end: end.toISOString(),
     status: body.status,
+    jobStage: 'Assigned',
+    jobEvents: [{ stage: 'Assigned', at: new Date().toISOString(), note: null }],
     notes: body.notes ?? '',
     source: 'manual',
     callId: null,

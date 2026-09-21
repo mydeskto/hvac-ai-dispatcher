@@ -1,6 +1,23 @@
 export type ServiceType = 'Cooling' | 'Heating' | 'Emergency';
 export type BookingStatus = 'Pending' | 'Confirmed' | 'Cancelled' | 'Completed';
 export type CallStatus = 'in-progress' | 'completed' | 'missed';
+/** Field-side progress a technician reports on a booking (dispatcher status stays separate). */
+export type JobStage = 'Assigned' | 'EnRoute' | 'OnSite' | 'Done';
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface TechLocation extends GeoPoint {
+  updatedAt: string;
+}
+
+export interface JobEvent {
+  stage: JobStage;
+  at: string;
+  note: string | null;
+}
 
 export interface WorkingHours {
   /** 0 = Sunday ... 6 = Saturday */
@@ -16,6 +33,12 @@ export interface Technician {
   skills: ServiceType[];
   workingHours: WorkingHours;
   active: boolean;
+  /** 4-digit code the technician uses to sign in to the field portal. */
+  pin: string;
+  /** Live GPS position reported by the technician app (mock-able). */
+  location: TechLocation | null;
+  /** Whether the technician is broadcasting their position right now. */
+  sharingLocation: boolean;
 }
 
 export interface Customer {
@@ -35,6 +58,9 @@ export interface Booking {
   start: string; // ISO
   end: string; // ISO
   status: BookingStatus;
+  /** Technician-reported field progress for work tracking. */
+  jobStage: JobStage;
+  jobEvents: JobEvent[];
   notes: string;
   source: 'ai-call' | 'manual';
   callId: string | null;

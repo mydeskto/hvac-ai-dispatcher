@@ -1,5 +1,21 @@
 export type ServiceType = 'Cooling' | 'Heating' | 'Emergency';
 export type BookingStatus = 'Pending' | 'Confirmed' | 'Cancelled' | 'Completed';
+export type JobStage = 'Assigned' | 'EnRoute' | 'OnSite' | 'Done';
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface TechLocation extends GeoPoint {
+  updatedAt: string;
+}
+
+export interface JobEvent {
+  stage: JobStage;
+  at: string;
+  note: string | null;
+}
 
 export interface WhatsAppMessage {
   id: string;
@@ -20,6 +36,8 @@ export interface Booking {
   start: string;
   end: string;
   status: BookingStatus;
+  jobStage: JobStage;
+  jobEvents: JobEvent[];
   notes: string;
   source: 'ai-call' | 'manual';
   callId: string | null;
@@ -29,6 +47,7 @@ export interface Booking {
   customerPhone: string | null;
   customerWhatsapp: string | null;
   location: string | null;
+  coords: GeoPoint | null;
   technicianName: string | null;
   whatsappMessage: WhatsAppMessage | null;
 }
@@ -65,10 +84,44 @@ export interface Technician {
   skills: ServiceType[];
   workingHours: { days: number[]; start: string; end: string };
   active: boolean;
+  pin: string;
+  location: TechLocation | null;
+  sharingLocation: boolean;
   availableNow: boolean;
   currentBookingId: string | null;
   upcomingJobs: number;
   nextJobAt: string | null;
+}
+
+export interface TechSummary {
+  jobsToday: number;
+  completedToday: number;
+  completedWeek: number;
+  completedTotal: number;
+  hoursThisWeek: number;
+  activeJobId: string | null;
+  nextJobAt: string | null;
+}
+
+export interface TechWorkDetail {
+  technician: Technician;
+  summary: TechSummary;
+  jobs: Booking[];
+}
+
+export interface TrackingJob extends Booking {
+  coords: GeoPoint | null;
+  distanceKm: number | null;
+}
+
+export interface TrackingEntry {
+  id: string;
+  name: string;
+  phone: string;
+  active: boolean;
+  sharingLocation: boolean;
+  location: TechLocation | null;
+  job: TrackingJob | null;
 }
 
 export interface Stats {

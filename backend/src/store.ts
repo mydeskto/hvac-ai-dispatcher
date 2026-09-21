@@ -74,6 +74,9 @@ function seedTechnicians(): void {
       skills: t.skills,
       workingHours: { days: t.days, start: t.start, end: t.end },
       active: true,
+      pin: (1001 + i).toString(),
+      location: { lat: 30.2672 + (i - 1.5) * 0.045, lng: -97.7431 + (i - 1.5) * 0.06, updatedAt: new Date().toISOString() },
+      sharingLocation: i % 2 === 0,
     });
   });
 }
@@ -171,6 +174,14 @@ function seedHistory(customers: Customer[]): void {
             start: slotStart.toISOString(),
             end: slotEnd.toISOString(),
             status,
+            jobStage: status === 'Completed' ? 'Done' : 'Assigned',
+            jobEvents:
+              status === 'Completed'
+                ? [
+                    { stage: 'Assigned' as const, at: startedAt.toISOString(), note: null },
+                    { stage: 'Done' as const, at: slotEnd.toISOString(), note: null },
+                  ]
+                : [{ stage: 'Assigned' as const, at: startedAt.toISOString(), note: null }],
             notes: `${service} service requested during AI call.`,
             source: 'ai-call',
             callId,

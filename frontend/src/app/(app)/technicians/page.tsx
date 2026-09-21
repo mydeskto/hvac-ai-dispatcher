@@ -1,8 +1,9 @@
 'use client';
 
-import { CircleDot, Clock, Phone } from 'lucide-react';
+import { Briefcase, CircleDot, Clock, KeyRound, Phone } from 'lucide-react';
 import { useState } from 'react';
 import { mutate } from 'swr';
+import { TechWorkModal } from '@/components/TechWorkModal';
 import { TopBar } from '@/components/TopBar';
 import { SectionCard, ServiceBadge } from '@/components/ui';
 import { patch, post, usePolling } from '@/lib/api';
@@ -15,6 +16,7 @@ const SERVICES: ServiceType[] = ['Cooling', 'Heating', 'Emergency'];
 export default function TechniciansPage() {
   const { data: technicians } = usePolling<Technician[]>('/technicians');
   const [adding, setAdding] = useState(false);
+  const [workTech, setWorkTech] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', phone: '', skills: ['Cooling'] as ServiceType[], start: '08:00', end: '17:00', days: [1, 2, 3, 4, 5] });
   const [error, setError] = useState<string | null>(null);
 
@@ -79,14 +81,27 @@ export default function TechniciansPage() {
                 {t.workingHours.start}–{t.workingHours.end} · {t.workingHours.days.map((d) => DAY_LABELS[d]).join(', ')}
               </p>
 
+              <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                <KeyRound className="h-3.5 w-3.5 text-purple-500" />
+                Field app PIN: <span className="font-mono font-semibold text-slate-700">{t.pin}</span>
+                <span className={`ml-1 ${t.sharingLocation ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  · GPS {t.sharingLocation ? 'live' : 'off'}
+                </span>
+              </p>
+
               <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
                 <span className="text-slate-600">
                   {t.upcomingJobs} upcoming job{t.upcomingJobs === 1 ? '' : 's'}
                   {t.nextJobAt ? <span className="block text-xs text-slate-400">Next: {formatDateTime(t.nextJobAt)}</span> : null}
                 </span>
-                <button type="button" className="btn-ghost" onClick={() => toggleActive(t)}>
-                  {t.active ? 'Set off duty' : 'Set on duty'}
-                </button>
+                <div className="flex gap-1.5">
+                  <button type="button" className="btn-ghost" onClick={() => setWorkTech(t.id)}>
+                    <Briefcase className="h-4 w-4" /> Work
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => toggleActive(t)}>
+                    {t.active ? 'Set off duty' : 'Set on duty'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -168,6 +183,8 @@ export default function TechniciansPage() {
           )}
         </SectionCard>
       </main>
+
+      {workTech ? <TechWorkModal technicianId={workTech} onClose={() => setWorkTech(null)} /> : null}
     </>
   );
 }

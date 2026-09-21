@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { router } from './routes';
+import { simulateMovement } from './tracking';
 
 const app = express();
 app.use(cors());
@@ -21,5 +22,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 const port = Number(process.env.PORT ?? 4000);
 app.listen(port, () => {
+  setInterval(simulateMovement, 3000);
   console.log(`HVAC AI Dispatcher API listening on http://localhost:${port}`);
 });

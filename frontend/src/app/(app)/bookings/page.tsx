@@ -84,6 +84,7 @@ export default function BookingsPage() {
                     <td className="td whitespace-nowrap">{b.technicianName}</td>
                     <td className="td">
                       <StatusBadge status={b.status} />
+                      <span className="mt-1 block text-xs text-slate-400">Field: {b.jobStage}</span>
                     </td>
                     <td className="td text-xs text-slate-500">
                       {b.whatsappMessage ? b.whatsappMessage.response ?? 'Awaiting reply' : 'Not sent'}

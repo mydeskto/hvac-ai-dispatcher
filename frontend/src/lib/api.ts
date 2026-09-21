@@ -38,3 +38,37 @@ export const patch = <T,>(path: string, body: unknown) =>
 
 export const put = <T,>(path: string, body: unknown) =>
   apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+
+/* ------------------------- technician portal auth ------------------------ */
+
+export const TECH_TOKEN_KEY = 'hvac_tech_token';
+
+export function getTechToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TECH_TOKEN_KEY);
+}
+
+export function clearTechSession() {
+  window.localStorage.removeItem(TECH_TOKEN_KEY);
+  document.cookie = 'hvac_tech=; Max-Age=0; path=/';
+}
+
+export async function techFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getTechToken();
+  return apiFetch<T>(path, {
+    ...init,
+    headers: { ...(token ? { 'x-tech-token': token } : {}), ...(init?.headers ?? {}) },
+  });
+}
+
+export function useTechPolling<T>(path: string | null, config?: SWRConfiguration) {
+  return useSWR<T>(path, (p: string) => techFetch<T>(p), {
+    refreshInterval: POLL_INTERVAL_MS,
+    revalidateOnFocus: true,
+    keepPreviousData: true,
+    ...config,
+  });
+}
+
+export const techPost = <T,>(path: string, body?: unknown) =>
+  techFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
