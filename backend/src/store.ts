@@ -9,6 +9,13 @@ import {
 } from './types';
 import { addDays, addMinutes, atTime, id, startOfDay } from './util';
 
+export interface TelephonyConfig {
+  apiKey: string;
+  connectionId: string;
+  phoneNumber: string;
+  publicBaseUrl: string;
+}
+
 export interface Database {
   technicians: Technician[];
   customers: Customer[];
@@ -16,6 +23,7 @@ export interface Database {
   calls: Call[];
   whatsapp: WhatsAppMessage[];
   phoneNumber: PhoneNumberConfig;
+  telephony: TelephonyConfig;
 }
 
 export const SLOT_MINUTES = 120;
@@ -26,6 +34,12 @@ export const db: Database = {
   bookings: [],
   calls: [],
   whatsapp: [],
+  telephony: {
+    apiKey: process.env.TELNYX_API_KEY ?? '',
+    connectionId: process.env.TELNYX_CONNECTION_ID ?? '',
+    phoneNumber: process.env.TELNYX_PHONE_NUMBER ?? '',
+    publicBaseUrl: process.env.PUBLIC_BASE_URL ?? '',
+  },
   phoneNumber: {
     number: '+1 (415) 555-0142',
     label: 'HVAC AI Dispatcher Main Line',

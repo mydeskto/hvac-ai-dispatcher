@@ -5,8 +5,20 @@ import { router } from './routes';
 import { simulateMovement } from './tracking';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// Lock down CORS to known origins when CORS_ORIGIN is set (comma-separated);
+// open in local/dev so the Next.js proxy and tools can reach the API.
+const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean);
+app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : undefined));
+
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+
+app.use(express.json({ limit: '1mb' }));
 app.use('/api', router);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -1,19 +1,97 @@
 'use client';
 
-import { PhoneCall, Send } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle2, PhoneCall, PhoneIncoming, Radio, Send, Server, X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { mutate } from 'swr';
+import { TelephonyCard } from '@/components/TelephonyCard';
 import { TopBar } from '@/components/TopBar';
 import { SectionCard } from '@/components/ui';
 import { post, put, usePolling } from '@/lib/api';
-import { AgentTurn, PhoneNumberConfig } from '@/lib/types';
+import { AgentTurn, Call, PhoneNumberConfig } from '@/lib/types';
 
 interface Line {
   speaker: 'agent' | 'caller';
   text: string;
 }
 
-export default function PhonePage() {
+function TranscriptBubbles({ lines, ended }: { lines: { speaker: 'agent' | 'caller'; text: string }[]; ended?: boolean }) {
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines.length]);
+  return (
+    <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-slate-50 p-4">
+      {lines.length === 0 ? (
+        <p className="text-sm text-slate-400">
+          Start a call to watch the AI agent greet the caller, qualify the job, check technician availability, negotiate a time slot and capture
+          the WhatsApp number.
+        </p>
+      ) : null}
+      {lines.map((line, i) => (
+        <div key={i} className={`flex ${line.speaker === 'agent' ? 'justify-start' : 'justify-end'}`}>
+          <div
+            className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+              line.speaker === 'agent' ? 'bg-purple-100 text-purple-900' : 'bg-orange-100 text-orange-900'
+            }`}
+          >
+            {line.text}
+          </div>
+        </div>
+      ))}
+      {ended ? <p className="text-center text-xs font-semibold text-slate-500">Call ended · logged to the CRM with transcript</p> : null}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+/** Live view of a real inbound call — polls the call record so the transcript streams in as turns happen. */
+function LiveCallPanel({ callId, onClose }: { callId: string; onClose: () => void }) {
+  const { data: call } = usePolling<Call>(`/calls/${callId}`, { refreshInterval: 1500 });
+  const ended = call?.status === 'completed' || call?.status === 'missed';
+  const ringing = call?.status === 'ringing';
+
+  return (
+    <SectionCard
+      title="Inbound call"
+      action={
+        <div className="flex items-center gap-2">
+          <span
+            className={`badge ${
+              ringing
+                ? 'animate-pulse bg-orange-100 text-orange-700 ring-orange-200'
+                : ended
+                  ? 'bg-slate-100 text-slate-600 ring-slate-200'
+                  : 'animate-pulse bg-emerald-100 text-emerald-700 ring-emerald-200'
+            }`}
+          >
+            <Radio className="mr-1 h-3 w-3" />
+            {ringing ? 'Ringing…' : ended ? 'Ended' : 'Live · AI agent on the line'}
+          </span>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      }
+    >
+      <div className="flex h-[420px] flex-col">
+        <p className="mb-2 text-xs text-slate-500">
+          {call ? `From ${call.from} · started ${new Date(call.startedAt).toLocaleTimeString()}` : 'Connecting…'}
+        </p>
+        <TranscriptBubbles lines={call?.transcript ?? []} ended={ended} />
+        {ended && call?.bookingId ? (
+          <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" /> Booking created and WhatsApp confirmation sent — see Bookings.
+          </p>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
+}
+
+function PhonePageInner() {
+  const router = useRouter();
+  const params = useSearchParams();
   const { data: phone } = usePolling<PhoneNumberConfig>('/settings/phone-number');
   const [draft, setDraft] = useState<PhoneNumberConfig | null>(null);
   const [saving, setSaving] = useState(false);
@@ -25,6 +103,8 @@ export default function PhonePage() {
   const [callerNumber, setCallerNumber] = useState('+1 (512) 555-0199');
   const [ended, setEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveCallId, setLiveCallId] = useState<string | null>(params.get('live'));
+  const [simulating, setSimulating] = useState(false);
 
   const config = draft ?? phone ?? null;
 
@@ -37,6 +117,21 @@ export default function PhonePage() {
       await mutate(() => true);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function simulateInbound() {
+    setSimulating(true);
+    setError(null);
+    try {
+      const res = await post<{ callId: string }>('/ai/calls/simulate');
+      setLiveCallId(res.callId);
+      router.replace(`/phone?live=${res.callId}`);
+      await mutate(() => true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start the call');
+    } finally {
+      setSimulating(false);
     }
   }
 
@@ -76,6 +171,16 @@ export default function PhonePage() {
     <>
       <TopBar title="Phone & AI agent" subtitle="Connect the business number the AI voice agent answers" />
       <main className="flex-1 space-y-6 overflow-y-auto bg-slate-50/50 p-8">
+        {liveCallId ? <LiveCallPanel callId={liveCallId} onClose={() => setLiveCallId(null)} /> : null}
+
+        <TelephonyCard />
+
+        <div className="flex justify-end">
+          <button type="button" className="btn-secondary" onClick={simulateInbound} disabled={simulating}>
+            <PhoneIncoming className="h-4 w-4" /> {simulating ? 'Dialing…' : 'Simulate inbound call'}
+          </button>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
           <SectionCard title="Connected business number">
             {config ? (
@@ -126,7 +231,7 @@ export default function PhonePage() {
           </SectionCard>
 
           <SectionCard
-            title="Live AI call simulator"
+            title="Manual AI simulator — drive each turn"
             action={
               <div className="flex items-center gap-2">
                 <input className="input w-44" value={callerNumber} onChange={(e) => setCallerNumber(e.target.value)} />
@@ -137,26 +242,7 @@ export default function PhonePage() {
             }
           >
             <div className="flex h-[420px] flex-col">
-              <div className="flex-1 space-y-3 overflow-y-auto rounded-lg bg-slate-50 p-4">
-                {lines.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    Start a call to watch the AI agent greet the caller, qualify the job, check technician availability, negotiate a time slot and
-                    capture the WhatsApp number.
-                  </p>
-                ) : null}
-                {lines.map((line, i) => (
-                  <div key={i} className={`flex ${line.speaker === 'agent' ? 'justify-start' : 'justify-end'}`}>
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                        line.speaker === 'agent' ? 'bg-purple-100 text-purple-900' : 'bg-orange-100 text-orange-900'
-                      }`}
-                    >
-                      {line.text}
-                    </div>
-                  </div>
-                ))}
-                {ended ? <p className="text-center text-xs font-semibold text-slate-500">Call ended · logged to the CRM with transcript</p> : null}
-              </div>
+              <TranscriptBubbles lines={lines} ended={ended} />
 
               {suggestions.length > 0 && callId ? (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -190,7 +276,29 @@ export default function PhonePage() {
             </div>
           </SectionCard>
         </div>
+
+        <SectionCard title="How calls reach the agent" className="text-sm text-slate-600">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+              <Server className="h-4 w-4" />
+            </span>
+            <p>
+              Every inbound call — real (Telnyx) or simulated — runs through the same server-side state machine in{' '}
+              <span className="font-mono">backend/src/aiAgent.ts</span>: greeting → service type → address → availability check with slot
+              renegotiation → WhatsApp capture → booking + confirmation. The <span className="font-medium">Calls</span> page logs ringing, live
+              and completed calls with recordings and transcripts.
+            </p>
+          </div>
+        </SectionCard>
       </main>
     </>
+  );
+}
+
+export default function PhonePage() {
+  return (
+    <Suspense>
+      <PhonePageInner />
+    </Suspense>
   );
 }

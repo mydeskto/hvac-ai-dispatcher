@@ -69,21 +69,37 @@ export default function CallsPage() {
                       {call.customerName ? <span className="block text-xs text-slate-400">{call.customerName}</span> : null}
                     </td>
                     <td className="td">
-                      <span
-                        className={`badge ${
-                          call.bookingStatus === 'Confirmed'
-                            ? 'bg-purple-100 text-purple-700 ring-purple-200'
-                            : call.bookingStatus === 'Pending'
-                              ? 'bg-orange-100 text-orange-700 ring-orange-200'
-                              : 'bg-slate-100 text-slate-600 ring-slate-200'
-                        }`}
-                      >
-                        {call.bookingStatus ?? call.outcome}
-                      </span>
+                      {call.status === 'ringing' ? (
+                        <span className="badge animate-pulse bg-orange-100 text-orange-700 ring-orange-200">
+                          <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-orange-500" />
+                          Ringing…
+                        </span>
+                      ) : call.status === 'in-progress' ? (
+                        <span className="badge animate-pulse bg-emerald-100 text-emerald-700 ring-emerald-200">
+                          <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Live
+                        </span>
+                      ) : (
+                        <span
+                          className={`badge ${
+                            call.bookingStatus === 'Confirmed'
+                              ? 'bg-purple-100 text-purple-700 ring-purple-200'
+                              : call.bookingStatus === 'Pending'
+                                ? 'bg-orange-100 text-orange-700 ring-orange-200'
+                                : 'bg-slate-100 text-slate-600 ring-slate-200'
+                          }`}
+                        >
+                          {call.bookingStatus ?? call.outcome}
+                        </span>
+                      )}
                     </td>
-                    <td className="td whitespace-nowrap">{formatDuration(call.durationSec)}</td>
+                    <td className="td whitespace-nowrap">{call.status === 'ringing' || call.status === 'in-progress' ? '—' : formatDuration(call.durationSec)}</td>
                     <td className="td">
-                      <audio controls preload="none" className="h-8 w-52" src={`${API_BASE.replace(/\/api$/, '')}${call.recordingUrl}`} />
+                      {call.status === 'ringing' || call.status === 'in-progress' ? (
+                        <span className="text-xs text-slate-400">recording…</span>
+                      ) : (
+                        <audio controls preload="none" className="h-8 w-52" src={`${API_BASE.replace(/\/api$/, '')}${call.recordingUrl}`} />
+                      )}
                     </td>
                     <td className="td">
                       <button type="button" className="btn-ghost" onClick={() => setSelected(call)}>

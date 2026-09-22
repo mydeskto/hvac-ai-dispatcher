@@ -94,6 +94,7 @@ export function LiveMap({
 
   useEffect(() => {
     let disposed = false;
+    const markerMap = markerRefs.current;
     import('leaflet').then((L) => {
       if (disposed || !containerRef.current || mapRef.current) return;
       leafletRef.current = L;
@@ -110,7 +111,7 @@ export function LiveMap({
       disposed = true;
       mapRef.current?.remove();
       mapRef.current = null;
-      markerRefs.current.clear();
+      markerMap.clear();
       lineRefs.current = [];
       readyRef.current = false;
     };

@@ -1,20 +1,23 @@
 'use client';
 
 import { PhoneIncoming } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { mutate } from 'swr';
 import { post, usePolling } from '@/lib/api';
 import { PhoneNumberConfig } from '@/lib/types';
 
 export function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
+  const router = useRouter();
   const { data: phone } = usePolling<PhoneNumberConfig>('/settings/phone-number');
   const [busy, setBusy] = useState(false);
 
   async function simulateCall() {
     setBusy(true);
     try {
-      await post('/ai/calls/simulate');
+      const res = await post<{ callId: string }>('/ai/calls/simulate');
       await mutate(() => true);
+      router.push(`/phone?live=${res.callId}`);
     } finally {
       setBusy(false);
     }

@@ -1,12 +1,21 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { endCall, reply, startCall } from './aiAgent';
+import { endCall, reply, runLiveCall, startCall } from './aiAgent';
 import { availableTechnicians, nextOpenSlots, slotsForDay } from './availability';
 import { SERVICE_CENTER } from './geo';
 import { generateWav } from './recording';
 import { bookingView, callView } from './serialize';
 import { SLOT_MINUTES, db, seed } from './store';
 import { buildStats, Range } from './stats';
+import {
+  attachNumber,
+  connectTelnyx,
+  disconnectTelnyx,
+  handleTelnyxEvent,
+  orderNumber,
+  searchNumbers,
+  telnyxStatus,
+} from './telnyx';
 import {
   setJobStage,
   techLogin,
@@ -197,27 +206,79 @@ router.post('/ai/calls/:id/end', (req, res) => {
   res.json(callView(endCall(req.params.id)));
 });
 
-/** Drives a full scripted AI call, including an unavailable-slot retry. */
+/**
+ * Starts a REAL-TIME scripted inbound call: the call rings, the agent answers,
+ * and the conversation plays out over ~30s with live transcript updates. The
+ * response returns immediately with the call id — poll /calls/:id to watch it.
+ */
 router.post('/ai/calls/simulate', (_req, res) => {
-  const service: ServiceType = (['Cooling', 'Heating', 'Emergency'] as ServiceType[])[Math.floor(Math.random() * 3)];
+  if (!db.phoneNumber.connected || !db.phoneNumber.aiAgentEnabled) {
+    throw httpError(409, 'AI agent is disabled for the connected number');
+  }
   const from = `+1 (512) 555-${Math.floor(1000 + Math.random() * 8999)}`;
-  const started = startCall(from);
-  reply(started.callId, `Hi, my ${service === 'Heating' ? 'furnace' : service === 'Emergency' ? 'unit is leaking and it is urgent' : 'AC'} is acting up.`);
-  reply(started.callId, '482 Willow Creek Rd, Austin, TX — the unit runs but the house is not reaching temperature.');
-  reply(started.callId, 'Can someone come tomorrow at 5am?');
-  const options = nextOpenSlots(addMinutes(new Date(), 60), service, 1);
-  if (options.length === 0) throw httpError(409, 'No availability in the next two weeks');
-  reply(started.callId, new Date(options[0].start).toISOString());
-  const turn = reply(started.callId, from.replace('512', '512'));
-  if (turn.bookingId) {
-    const booking = db.bookings.find((b) => b.id === turn.bookingId) as Booking;
-    sendBookingConfirmation(booking, from);
+  const call = runLiveCall(from, (booking) => {
+    const customer = db.customers.find((c) => c.id === booking.customerId);
+    sendBookingConfirmation(booking, customer?.whatsapp ?? customer?.phone ?? '');
+  });
+  res.status(201).json({ callId: call.id, status: call.status });
+});
+
+/* ---------------------------------- Telnyx --------------------------------- */
+
+router.get('/telnyx/status', (_req, res) => {
+  res.json(telnyxStatus());
+});
+
+router.get('/telephony/status', (_req, res) => {
+  res.json(telnyxStatus());
+});
+
+/** Verify Telnyx credentials (API key + Call Control app id) and store them. */
+router.post('/telephony/connect', async (req, res) => {
+  const body = z
+    .object({
+      apiKey: z.string().min(10),
+      connectionId: z.string().min(5),
+      publicBaseUrl: z.string().url().optional(),
+    })
+    .parse(req.body);
+  res.json(await connectTelnyx(body));
+});
+
+/** Attach a number already owned on the Telnyx account. */
+router.post('/telephony/attach-number', async (req, res) => {
+  const body = z.object({ phoneNumber: z.string().regex(/^\+1\d{10}$/, 'Use E.164 format, e.g. +14155550142') }).parse(req.body);
+  res.json(await attachNumber(body.phoneNumber));
+});
+
+/** Search US voice-capable numbers available for purchase. */
+router.get('/telephony/available-numbers', async (req, res) => {
+  const { areaCode } = req.query as Record<string, string | undefined>;
+  res.json(await searchNumbers(areaCode));
+});
+
+/** Buy a number, assign it to the Call Control app and attach it. */
+router.post('/telephony/order-number', async (req, res) => {
+  const body = z.object({ phoneNumber: z.string().min(10) }).parse(req.body);
+  res.json(await orderNumber(body.phoneNumber));
+});
+
+router.post('/telephony/disconnect', (_req, res) => {
+  res.json(disconnectTelnyx());
+});
+
+/**
+ * Telnyx Call Control webhook — receives call.initiated / answered /
+ * gather.ended / speak.ended / hangup events and drives the AI agent turn by
+ * turn. Always 200s so Telnyx doesn't retry.
+ */
+router.post('/telnyx/webhook', async (req, res) => {
+  try {
+    await handleTelnyxEvent(req.body);
+  } catch (err) {
+    console.error('[telnyx] webhook error:', err);
   }
-  const call = db.calls.find((c) => c.id === started.callId);
-  if (call) {
-    call.durationSec = 120 + Math.floor(Math.random() * 180);
-  }
-  res.status(201).json({ call: call ? callView(call) : null, bookingId: turn.bookingId });
+  res.json({ received: true });
 });
 
 /* --------------------------- technician portal --------------------------- */

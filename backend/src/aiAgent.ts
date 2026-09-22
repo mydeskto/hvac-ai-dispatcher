@@ -41,7 +41,8 @@ function getCall(callId: string): Call {
   return call;
 }
 
-export function startCall(from: string, name?: string): AgentTurn {
+/** Creates the inbound call in `ringing` state — nothing is in the transcript until the agent answers. */
+export function ringCall(from: string, name?: string): Call {
   const callId = id('call');
   const call: Call = {
     id: callId,
@@ -51,7 +52,7 @@ export function startCall(from: string, name?: string): AgentTurn {
     startedAt: new Date().toISOString(),
     endedAt: null,
     durationSec: 0,
-    status: 'in-progress',
+    status: 'ringing',
     outcome: 'in-progress',
     transcript: [],
     recordingUrl: `/api/calls/${callId}/recording`,
@@ -69,8 +70,23 @@ export function startCall(from: string, name?: string): AgentTurn {
     technicianId: null,
     name: name ?? null,
   });
+  return call;
+}
+
+/** Picks up a ringing call: greeting goes on the transcript and the agent is live. */
+export function answerCall(callId: string): AgentTurn {
+  const call = getCall(callId);
+  if (call.status !== 'ringing' && call.status !== 'in-progress') {
+    throw Object.assign(new Error('Call is not answerable'), { status: 409 });
+  }
+  call.status = 'in-progress';
   say(call, db.phoneNumber.greeting);
   return { callId, step: 'reason', agentMessage: db.phoneNumber.greeting, suggestions: ['Cooling', 'Heating', 'Emergency'], bookingId: null };
+}
+
+export function startCall(from: string, name?: string): AgentTurn {
+  const call = ringCall(from, name);
+  return answerCall(call.id);
 }
 
 function finalizeBooking(session: Session, call: Call, whatsappNumber: string): Booking {
@@ -200,4 +216,57 @@ export function reply(callId: string, text: string): AgentTurn {
 
 export function getSession(callId: string): Session | undefined {
   return sessions.get(callId);
+}
+
+export function isSessionActive(callId: string): boolean {
+  return sessions.has(callId);
+}
+
+/**
+ * Runs a scripted inbound call in REAL TIME: the call rings, the agent picks
+ * up, and caller/agent turns land in the transcript every few seconds — the UI
+ * watches it unfold via polling instead of getting a finished record. The
+ * script deliberately asks for an unavailable slot first so the renegotiation
+ * path is exercised.
+ */
+export function runLiveCall(from: string, onBooked?: (booking: Booking) => void): Call {
+  const call = ringCall(from);
+  const service: ServiceType = (['Cooling', 'Heating', 'Emergency'] as ServiceType[])[Math.floor(Math.random() * 3)];
+  const reasonLine =
+    service === 'Heating'
+      ? 'Hi, my furnace is acting up.'
+      : service === 'Emergency'
+        ? 'Hi, my unit is leaking and it is urgent.'
+        : 'Hi, my AC is not keeping the house cool.';
+  const slotOptions = nextOpenSlots(addMinutes(new Date(), 60), service, 1);
+  const chosenSlot = slotOptions[0]?.start ?? null;
+
+  const callerLines: string[] = [
+    reasonLine,
+    '482 Willow Creek Rd, Austin, TX — the unit runs but the house is not reaching temperature.',
+    'Can someone come tomorrow at 5am?',
+    ...(chosenSlot ? [chosenSlot] : []),
+    from,
+  ];
+
+  let step = 0;
+  const answerTimer = setTimeout(() => {
+    if (!sessions.has(call.id)) return;
+    answerCall(call.id);
+    const tick = () => {
+      if (!sessions.has(call.id) || step >= callerLines.length) return;
+      const line = callerLines[step];
+      step += 1;
+      const turn = reply(call.id, line);
+      if (turn.bookingId) {
+        const booking = db.bookings.find((b) => b.id === turn.bookingId);
+        if (booking) onBooked?.(booking);
+        return;
+      }
+      setTimeout(tick, 3200);
+    };
+    setTimeout(tick, 3200);
+  }, 2500);
+  answerTimer.unref?.();
+  return call;
 }

@@ -3,17 +3,8 @@
 import { CheckCircle2, ExternalLink, KeyRound, MapPin, Radio, X } from 'lucide-react';
 import { usePolling } from '@/lib/api';
 import { formatDate, formatDateTime, formatTime } from '@/lib/format';
-import { JobStage, TechWorkDetail } from '@/lib/types';
-import { ServiceBadge, StatusBadge } from './ui';
-
-const STAGE_LABEL: Record<JobStage, string> = { Assigned: 'Assigned', EnRoute: 'En route', OnSite: 'On site', Done: 'Done' };
-
-const STAGE_STYLES: Record<JobStage, string> = {
-  Assigned: 'bg-slate-100 text-slate-600 ring-slate-200',
-  EnRoute: 'bg-orange-100 text-orange-700 ring-orange-200',
-  OnSite: 'bg-purple-100 text-purple-700 ring-purple-200',
-  Done: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-};
+import { TechWorkDetail } from '@/lib/types';
+import { JOB_STAGE_LABEL as STAGE_LABEL, ServiceBadge, StageBadge, StatusBadge } from './ui';
 
 export function TechWorkModal({ technicianId, onClose }: { technicianId: string; onClose: () => void }) {
   const { data } = usePolling<TechWorkDetail>(`/technicians/${technicianId}/work`);
@@ -120,7 +111,7 @@ export function TechWorkModal({ technicianId, onClose }: { technicianId: string;
                   {b.serviceType} · {b.customerName ?? b.customerPhone}
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className={`badge ${STAGE_STYLES[b.jobStage]}`}>{STAGE_LABEL[b.jobStage]}</span>
+                  <StageBadge stage={b.jobStage} />
                   <StatusBadge status={b.status} />
                 </div>
               </div>

@@ -4,12 +4,10 @@ import { CircleDot, ExternalLink, MapPin, Navigation, Phone } from 'lucide-react
 import { useMemo, useState } from 'react';
 import { LiveMap, MapLineData, MapMarkerData } from '@/components/LiveMap';
 import { TopBar } from '@/components/TopBar';
-import { SectionCard, ServiceBadge } from '@/components/ui';
+import { JOB_STAGE_LABEL as STAGE_LABEL, SectionCard, ServiceBadge } from '@/components/ui';
 import { usePolling } from '@/lib/api';
 import { formatDateTime, formatTime } from '@/lib/format';
-import { JobStage, TrackingEntry } from '@/lib/types';
-
-const STAGE_LABEL: Record<JobStage, string> = { Assigned: 'Assigned', EnRoute: 'En route', OnSite: 'On site', Done: 'Done' };
+import { TrackingEntry } from '@/lib/types';
 
 const TECH_COLORS = ['#7c3aed', '#f97316', '#0ea5e9', '#10b981', '#e11d48', '#eab308'];
 

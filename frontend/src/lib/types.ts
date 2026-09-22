@@ -65,7 +65,7 @@ export interface Call {
   startedAt: string;
   endedAt: string | null;
   durationSec: number;
-  status: 'in-progress' | 'completed' | 'missed';
+  status: 'ringing' | 'in-progress' | 'completed' | 'missed';
   outcome: 'booked' | 'no-booking' | 'in-progress';
   transcript: TranscriptLine[];
   recordingUrl: string;
@@ -152,6 +152,23 @@ export interface Slot {
   start: string;
   end: string;
   technicianIds: string[];
+}
+
+export interface TelnyxStatus {
+  provider: 'telnyx';
+  configured: boolean;
+  numberAttached: boolean;
+  apiKeySet: boolean;
+  connectionIdSet: boolean;
+  phoneNumber: string | null;
+  webhookUrl: string | null;
+  missing: string[];
+}
+
+export interface AvailableNumber {
+  phoneNumber: string;
+  region: string;
+  monthlyCost: string | null;
 }
 
 export interface AgentTurn {

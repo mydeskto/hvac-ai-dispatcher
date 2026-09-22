@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const isTechArea = pathname.startsWith('/tech');
+  const isTechArea = pathname === '/tech' || pathname.startsWith('/tech/');
   const signedIn = Boolean(request.cookies.get('hvac_session')?.value);
   const techSignedIn = Boolean(request.cookies.get('hvac_tech')?.value);
   const isLogin = pathname === '/login';

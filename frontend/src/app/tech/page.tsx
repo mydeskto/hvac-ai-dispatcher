@@ -15,33 +15,16 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mutate } from 'swr';
+import { JOB_STAGE_LABEL as STAGE_LABEL, StageBadge } from '@/components/ui';
 import { clearTechSession, getTechToken, techPost, useTechPolling } from '@/lib/api';
 import { formatDate, formatDateTime, formatTime } from '@/lib/format';
 import { Booking, JobStage, Technician, TechSummary } from '@/lib/types';
-
-const STAGE_LABEL: Record<JobStage, string> = {
-  Assigned: 'Assigned',
-  EnRoute: 'En route',
-  OnSite: 'On site',
-  Done: 'Done',
-};
-
-const STAGE_STYLES: Record<JobStage, string> = {
-  Assigned: 'bg-slate-100 text-slate-600 ring-slate-200',
-  EnRoute: 'bg-orange-100 text-orange-700 ring-orange-200',
-  OnSite: 'bg-purple-100 text-purple-700 ring-purple-200',
-  Done: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-};
 
 const NEXT_ACTION: Partial<Record<JobStage, { stage: JobStage; label: string }>> = {
   Assigned: { stage: 'EnRoute', label: 'Start travel' },
   EnRoute: { stage: 'OnSite', label: 'Arrived on site' },
   OnSite: { stage: 'Done', label: 'Complete job' },
 };
-
-export function StageBadge({ stage }: { stage: JobStage }) {
-  return <span className={`badge ${STAGE_STYLES[stage]}`}>{STAGE_LABEL[stage]}</span>;
-}
 
 function googleEmbed(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}&z=14&output=embed`;

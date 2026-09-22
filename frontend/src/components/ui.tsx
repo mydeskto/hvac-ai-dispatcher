@@ -1,6 +1,6 @@
 'use client';
 
-import { BookingStatus, ServiceType } from '@/lib/types';
+import { BookingStatus, JobStage, ServiceType } from '@/lib/types';
 import { serviceStyles, statusStyles } from '@/lib/format';
 
 export function StatCard({
@@ -39,6 +39,24 @@ export function StatusBadge({ status }: { status: BookingStatus }) {
 
 export function ServiceBadge({ service }: { service: ServiceType }) {
   return <span className={`badge ${serviceStyles[service]}`}>{service}</span>;
+}
+
+export const JOB_STAGE_LABEL: Record<JobStage, string> = {
+  Assigned: 'Assigned',
+  EnRoute: 'En route',
+  OnSite: 'On site',
+  Done: 'Done',
+};
+
+const jobStageStyles: Record<JobStage, string> = {
+  Assigned: 'bg-slate-100 text-slate-600 ring-slate-200',
+  EnRoute: 'bg-orange-100 text-orange-700 ring-orange-200',
+  OnSite: 'bg-purple-100 text-purple-700 ring-purple-200',
+  Done: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+};
+
+export function StageBadge({ stage }: { stage: JobStage }) {
+  return <span className={`badge ${jobStageStyles[stage]}`}>{JOB_STAGE_LABEL[stage]}</span>;
 }
 
 export function SectionCard({

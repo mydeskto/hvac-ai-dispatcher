@@ -1,6 +1,6 @@
 export type ServiceType = 'Cooling' | 'Heating' | 'Emergency';
 export type BookingStatus = 'Pending' | 'Confirmed' | 'Cancelled' | 'Completed';
-export type CallStatus = 'in-progress' | 'completed' | 'missed';
+export type CallStatus = 'ringing' | 'in-progress' | 'completed' | 'missed';
 /** Field-side progress a technician reports on a booking (dispatcher status stays separate). */
 export type JobStage = 'Assigned' | 'EnRoute' | 'OnSite' | 'Done';
 
